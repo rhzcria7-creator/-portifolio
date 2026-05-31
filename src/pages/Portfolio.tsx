@@ -1,6 +1,6 @@
-import React from 'react';
-import { motion } from 'framer-motion';
-import { CheckCircle2, ChevronRight, BookOpen, Star, Sparkles } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { CheckCircle2, ChevronRight, BookOpen, Star, Sparkles, Check } from 'lucide-react';
 import { ProjectButton } from '../components/ProjectButton';
 import BlurText from '../components/BlurText';
 import GradientText from '../components/GradientText';
@@ -65,6 +65,75 @@ const chapters = [
 ];
 
 export default function Portfolio() {
+    const [selectedChapters, setSelectedChapters] = useState<string[]>(chapters.map(c => c.id));
+    
+    const handleToggleChapter = (id: string) => {
+        setSelectedChapters(prev => {
+            if (prev.includes(id)) {
+                // don't allow unselecting all, at least 1 must be selected
+                if (prev.length === 1) return prev;
+                return prev.filter(cId => cId !== id);
+            } else {
+                return [...prev, id];
+            }
+        });
+    };
+
+    const handleSelectAll = () => setSelectedChapters(chapters.map(c => c.id));
+
+    const { rawTotal, nicePriceStr, currentDiscount } = useMemo(() => {
+        let rawSum = 0;
+        selectedChapters.forEach(id => {
+            const chap = chapters.find(c => c.id === id);
+            if (chap) {
+                const parsePrice = parseFloat(chap.price.replace('R$ ', '').replace(',', '.'));
+                rawSum += parsePrice;
+            }
+        });
+        
+        const count = selectedChapters.length;
+        let discount = 0;
+        if (count === 2) discount = 0.15;
+        else if (count === 3) discount = 0.25;
+        else if (count === 4) discount = 0.35;
+        else if (count === 5) discount = 0.45;
+        else if (count === 6) discount = 0.55;
+        else if (count === 7) discount = 0.65;
+        else if (count === 8) discount = 0.82; // A puta desconto pra vender todos
+        
+        let discounted = rawSum * (1 - discount);
+        
+        function makeNice(val: number) {
+            if (val <= 49.9) return { int: 49, cents: "90", formatted: "49,90" };
+            const intValue = Math.floor(val);
+            const closest7 = Math.round((intValue - 7) / 10) * 10 + 7;
+            const closest9 = Math.round((intValue - 9) / 10) * 10 + 9;
+            
+            const dist7 = Math.abs(val - closest7);
+            const dist9 = Math.abs(val - closest9);
+            
+            const bestInt = dist7 < dist9 ? closest7 : closest9;
+            const finalInt = Math.max(49, bestInt);
+            
+            const centsStr = finalInt % 2 === 0 ? "90" : "99";
+            return { int: finalInt, cents: centsStr, formatted: `${finalInt},${centsStr}` };
+        }
+        
+        const niceVal = makeNice(count === 1 ? rawSum : discounted);
+        
+        const formatBRL = (val: number) => val.toFixed(2).replace('.', ',');
+        
+        let displayStr = count === 1 ? (chapters.find(c => c.id === selectedChapters[0])?.price.replace('R$ ', '') || niceVal.formatted) : niceVal.formatted;
+
+        return {
+            rawTotal: rawSum,
+            nicePriceStr: displayStr,
+            currentDiscount: Math.round(discount * 100)
+        };
+    }, [selectedChapters]);
+
+    const formatBRL = (val: number) => val.toFixed(2).replace('.', ',');
+
     return (
         <div className="w-full bg-neutral-900 min-h-screen relative overflow-hidden">
             {/* Background Glows */}
@@ -102,39 +171,46 @@ export default function Portfolio() {
 
             <section className="py-12 px-6 max-w-7xl mx-auto z-10 relative">
                 <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
-                    {chapters.map((chapter, index) => (
-                        <motion.div 
-                            key={chapter.id}
-                            initial={{ opacity: 0, y: 30 }}
-                            whileInView={{ opacity: 1, y: 0 }}
-                            whileHover={{ scale: 1.05, y: -5 }}
-                            viewport={{ once: true, margin: "-50px" }}
-                            transition={{ duration: 0.6, delay: index * 0.1, ease: "easeOut" }}
-                            className="bg-neutral-800/40 backdrop-blur-md border border-white/10 rounded-3xl p-8 hover:bg-neutral-800/60 hover:shadow-[0_0_30px_rgba(16,185,129,0.15)] transition-all group flex flex-col cursor-crosshair"
-                        >
-                            <div className="w-12 h-12 rounded-2xl bg-neutral-900 border border-white/5 flex items-center justify-center text-emerald-400 mb-6">
-                                <BookOpen className="w-6 h-6" />
-                            </div>
-                            
-                            <h3 className="text-xl font-bold text-white tracking-tight mb-1">
-                                {chapter.title.split(':')[0]}
-                            </h3>
-                            <p className="text-emerald-400 text-sm font-semibold mb-4">
-                                {chapter.subtitle}
-                            </p>
-                            
-                            <p className="text-neutral-400 text-sm leading-relaxed mb-8 flex-grow">
-                                {chapter.description}
-                            </p>
-                            
-                            <div className="border-t border-white/5 pt-6 mt-auto">
-                                <div className="flex items-center justify-between">
-                                    <span className="text-neutral-500 text-xs tracking-wider uppercase">Valor Avulso</span>
-                                    <span className="text-white font-bold text-lg">{chapter.price}</span>
+                    {chapters.map((chapter, index) => {
+                        const isSelected = selectedChapters.includes(chapter.id);
+                        return (
+                            <motion.div 
+                                key={chapter.id}
+                                initial={{ opacity: 0, y: 30 }}
+                                whileInView={{ opacity: 1, y: 0 }}
+                                whileHover={{ scale: 1.03, y: -5 }}
+                                viewport={{ once: true, margin: "-50px" }}
+                                transition={{ duration: 0.5, delay: index * 0.05, ease: "easeOut" }}
+                                onClick={() => handleToggleChapter(chapter.id)}
+                                className={`relative overflow-hidden backdrop-blur-[20px] border rounded-3xl p-8 transition-all duration-500 group flex flex-col cursor-pointer ${isSelected ? 'bg-gradient-to-br from-emerald-900/40 to-neutral-900/40 border-emerald-500/50 shadow-[0_8px_32px_0_rgba(16,185,129,0.2)]' : 'bg-gradient-to-br from-neutral-800/30 to-neutral-900/30 border-white/10 hover:from-neutral-800/40 hover:to-neutral-900/40 hover:shadow-[0_8px_32px_0_rgba(255,255,255,0.05)]'} before:absolute before:inset-0 before:bg-gradient-to-b before:from-white/5 before:to-transparent before:pointer-events-none before:rounded-3xl`}
+                            >
+                                <div className="flex items-start justify-between mb-6">
+                                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-colors ${isSelected ? 'bg-emerald-500/20 text-emerald-400' : 'bg-neutral-900 border border-white/5 text-neutral-500'}`}>
+                                        <BookOpen className="w-6 h-6" />
+                                    </div>
+                                    {isSelected && <CheckCircle2 className="w-6 h-6 text-emerald-400" />}
                                 </div>
-                            </div>
-                        </motion.div>
-                    ))}
+                                
+                                <h3 className={`text-xl font-bold tracking-tight mb-1 transition-colors ${isSelected ? 'text-emerald-50' : 'text-white'}`}>
+                                    {chapter.title.split(':')[0]}
+                                </h3>
+                                <p className="text-emerald-400 text-sm font-semibold mb-4">
+                                    {chapter.subtitle}
+                                </p>
+                                
+                                <p className="text-neutral-400 text-sm leading-relaxed mb-8 flex-grow">
+                                    {chapter.description}
+                                </p>
+                                
+                                <div className="border-t border-white/5 pt-6 mt-auto">
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-neutral-500 text-xs tracking-wider uppercase">Valor Avulso</span>
+                                        <span className={`font-bold text-lg ${isSelected ? 'text-emerald-400' : 'text-white'}`}>{chapter.price}</span>
+                                    </div>
+                                </div>
+                            </motion.div>
+                        );
+                    })}
                 </div>
             </section>
 
@@ -157,27 +233,32 @@ export default function Portfolio() {
                         </div>
 
                         <h2 className="text-3xl md:text-5xl font-bold text-white mb-6">
-                            Masterclass Pack Completo
+                            {selectedChapters.length === 8 ? "Masterclass Pack Completo" : `Seu Pacote Personalizado (${selectedChapters.length} Capítulos)`}
                         </h2>
                         
                         <p className="text-lg text-neutral-300 max-w-2xl mx-auto mb-10 leading-relaxed font-light">
-                            Não compre os capítulos avulsos e acabe pagando <span className="line-through opacity-60">mais de R$ 560,00</span>. 
-                            Leve o pacote completo com todos os 8 e-books agora com um super desconto exclusivo. 
-                            Acesso imediato a todas as estratégias.
+                            {selectedChapters.length === 8 ? (
+                                <>Não compre os capítulos avulsos e acabe pagando <span className="line-through opacity-60">R$ {formatBRL(rawTotal)}</span>. Leve o pacote completo com todos os 8 e-books agora com um super desconto exclusivo. Acesso imediato a todas as estratégias.</>
+                            ) : (
+                                <>Você selecionou {selectedChapters.length} {selectedChapters.length === 1 ? 'capítulo' : 'capítulos'}. {selectedChapters.length < 8 && <button onClick={handleSelectAll} className="text-emerald-400 hover:text-emerald-300 underline font-medium ml-1">Adicione todos os 8 para o desconto máximo!</button>}</>
+                            )}
                         </p>
 
                         <div className="flex flex-col md:flex-row items-center justify-center gap-8 mb-12">
-                            <div className="text-right hidden md:block">
-                                <p className="text-neutral-500 text-sm font-medium line-through">R$ 567,46</p>
-                            </div>
+                            {selectedChapters.length > 1 && (
+                                <div className="text-right hidden md:block">
+                                    <p className="text-neutral-500 text-sm font-medium line-through">R$ {formatBRL(rawTotal)}</p>
+                                    <p className="text-emerald-500 text-xs font-bold mt-1">-{currentDiscount}% de Desconto</p>
+                                </div>
+                            )}
                             <div className="bg-emerald-500/10 border border-emerald-500/30 px-8 py-4 rounded-3xl">
-                                <span className="text-emerald-400 font-bold text-5xl tracking-tighter">R$ 97,99</span>
+                                <span className="text-emerald-400 font-bold text-5xl tracking-tighter">R$ {nicePriceStr}</span>
                             </div>
                         </div>
 
                         <div className="flex justify-center">
                             <ProjectButton href="#">
-                                Adquirir Pack Completo Agora
+                                {selectedChapters.length === 8 ? "Adquirir Pack Completo Agora" : `Garantir ${selectedChapters.length === 1 ? 'Meu Capítulo' : `Meus ${selectedChapters.length} Capítulos`} ${selectedChapters.length === 1 ? '' : 'com Desconto'}`}
                             </ProjectButton>
                         </div>
                         <p className="text-neutral-500 text-sm mt-6 flex items-center justify-center gap-2">
